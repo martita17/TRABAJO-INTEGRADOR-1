@@ -1,0 +1,157 @@
+---
+title: "TRABAJO INTEGRADOR I - Presentación final"
+author: "Fauquié - Peiretti - Tapia Serrano"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: united
+    fig_width: 8
+    fig_height: 6
+---
+
+```{r include=FALSE}
+# CARGAMOS LAS LIBRERÍAS
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(fuzzyjoin)
+library(stringr)
+library(stringi)
+library(tm)
+library(leaflet)
+library(paletteer)
+
+# CARGAMOS LAS BASES Y OBJETOS QUE UTILIZAREMOS
+salarios_tr2022_geo <- read_rds(file = "BASES-Y-VIZ/PRESENTACION_FINAL/salarios_tr2022_geo.rds")
+paleta2 <- colorNumeric(palette = "viridis", domain = salarios_tr2022_geo$mean)
+mean_sect_ano <- read.csv("BASES-Y-VIZ//PRESENTACION_FINAL/mean_sect_ano.csv", header = TRUE)
+colores3 <- c("#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#E377C2", paletteer_dynamic("cartography::grey.pal", 13))
+```
+
+PRESENTACIÓN DEL DOCUMENTO
+
+<br>
+
+### Consigna 1
+_______________________________________________________________________________________
+**Identificar los departamentos con mayores salarios a partir de un mapa coroplético.**
+
+<br>
+
+```{r echo=FALSE}
+# CÓDIGO DE LA VISUALIZACIÓN
+# 1 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 1)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Primer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 2 o trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 2)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Segundo trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 3 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 3)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Tercer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 3 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 3)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Tercer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 4 o trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 4)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Cuarto trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+
+ESPACIO PARA EL ANÁLISIS DE LOS MAPAS.
+
+<br>
+
+### Consigna 2
+_______________________________________________________________________________________
+**Identificar los 5 sectores de actividad con salarios más bajos, expresados en un gráfico de barras**
+
+<br>
+
+```{r echo=FALSE, fig.width=12, fig.height=8}
+# CÓDIGO DE LA VISUALIZACIÓN
+mean_sect_ano %>%
+  filter(year <= 2019)%>% 
+  ggplot(aes(x = factor(letra, levels = c("I", "P", "N", "L", "S", "R", "F", "G", "Q", "A", "M", "O", "C", "J", "E", "H", "K", "D", "B")), y = mean_sector, fill = factor(letra_desc, levels = c("Serv. De Alojamiento Y Serv. De Comida", "Enseñanza", "Act. Administrativas Y Serv. De Apoyo", "Serv. Inmobiliarios", "Serv. De Asoc. Y Serv. Personales", "Serv. Art., Cult., Dep.  Y Esparcimiento", "Construcción", "Comercio P/Mayor Y P/Menor, Rep. De Vehiculos", "Salud Humana Y Serv. Soc.", "Agricultura, Ganadería, Caza, Silvicultura Y Pesca", "Serv. Profesionales, Científicos Y Técnicos", "Adm. Publica, Defensa Y S. S. Obligatoria", "Industria Manufacturera", "Información Y Comunicaciones", "Suministro Agua, G. De Residuos Y Saneamiento", "Serv. De Transporte Y Almacenamiento", "Int. Financiera Y Serv. De Seguros", "Suministro De Elect., Gas, Vapor, A. A.", "Explotacion De Minas Y Canteras"))))+
+  geom_col(width = 0.5)+
+  scale_fill_manual(name = "Sector de actividad", values = c(colores3))+
+  facet_wrap(~year, 5, 2)+
+  labs(title = "Salario promedio por sector, 2014-2019",
+       subtitle = "Total país",
+       x = "Código sector de actividad",
+       y = "Salario promedio",
+       caption = "Fuente: Ministerio de Desarrollo Productivo - Argentina
+       Elaboración: propia")+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        axis.text.y = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        legend.title = element_text(size = 7, angle = 90, hjust = 0.5),
+        legend.text = element_text(size = 6),
+        legend.position = "bottom")
+```
+
+ESPACIO PARA EL ANÁLISIS DEL GRÁFICO
+
+<br>
+
+### Consigna 3
+_______________________________________________________________________________________
+**Estime el salario promedio del total del país a lo largo de los años disponibles en la base. Luego, elija cuatro sectores de actividad (los cuales se distinguen por la letra) o grupos de sectores y visualice la evolución de sus salarios expresados en relación al promedio nacional. Por ejemplo, si para un año X, el salario promedio nacional es 100 y el de la rama petrolera es 150, el dato para la última rama debe expresarse como 1,5**
+
+<br>
+
+![Animation](BASES-Y-VIZ/VIZ/graf_comp.gif)
+
+<br>
+
+Espacio para el análisis.
+
+<br>
+
+![Brecha Salarial](BASES-Y-VIZ/VIZ/brecha_salarial_plot.png)
+
+<br>
+
+Espacio para el análisis.

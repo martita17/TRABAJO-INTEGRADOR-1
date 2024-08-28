@@ -1,0 +1,174 @@
+---
+title: "TRABAJO INTEGRADOR I - Bitácora 2"
+author: "Fauquié - Peiretti - Tapia Serrano"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: united
+    fig_width: 8
+    fig_height: 6
+---
+
+El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 1 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
+
+Para el desarrollo hemos utilizado las bases y diccionarios del [Ministerio de Desarrollo Productivo de la República Argentina](https://datos.produccion.gob.ar/dataset/salarios-por-departamento-partido-y-sector-de-actividad). Entre las bases del Ministerio de Desarrollo Productivo se ha escogido aquella que contiene el **salario promedio para el total de los trabajadores registrados (sector privado, empresas públicas y sector público), desagregado por departamento y por actividad**.
+
+<br>
+
+### Consigna 2
+_______________________________________________________________________________________
+**Identificar los 5 sectores de actividad con salarios más bajos, expresados en un gráfico de barras**
+
+<br>
+
+##### Cargamos las librerías
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(sf)
+library(ggplot2)
+library(paletteer)
+library(stringr)
+```
+
+<br>
+
+##### Cargamos las bases
+
+```{r message=FALSE}
+tot_regis_act <- read_csv("https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/salarios/w_mean_depto_total_clae2.csv")
+
+glimpse(tot_regis_act)
+
+dicc_dptos <- read_csv("https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/diccionario_cod_depto.csv")
+
+dicc_sector <- read_csv("https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/diccionario_clae2.csv")
+```
+
+Al revisar la base de salarios podemos identificar que la misma cuenta con 5 variables y 3.726.594 observaciones. A su vez cada observación corresponde al salario promedio mensual de una determinada actividad, para un departamento específico.
+Sin embargo no contiene dos variables clave para la visualización que esperamos realizar: el nombre de cada departamento y el código/nombre del sector al que pertenece cada observación. Por este motivo, hemos decidido traer también el **Diccionario de Departamentos** y el **Diccionario de Sector**.
+
+<br>
+
+##### Exploramos y preparamos la base
+
+Teniendo una noción de lo que contiene nuestra base de salarios, podemos avanzar revisando los diccionarios a fin de identificar las variables que nos pueden ser útiles a fin de realizar el join.
+
+```{r}
+glimpse(head(dicc_dptos, 3))
+glimpse(head(dicc_sector, 3))
+```
+En este caso hemos decidido incorporar la función head() a la exploración de la base dado que, tratándose de diccionarios, no nos interesa conocer la cantidad de observaciones, sino sus variables y las características de estas.
+Identificamos que las variables que pueden servirnos como clave para realizar el join son:
+
+- dicc_dptos -> codigo_departamento_indec y id_provincia_indec
+- dicc_sector -> clae2
+
+A su vez, podemos suponer que, dado que los diccionarios son proporcionados por la misma institución de la cual tomamos la base de salarios, no necesitaremos acondicionar las bases para realizar el join.
+
+¡Momento join!
+
+```{r}
+tot_regis_act<- tot_regis_act %>% 
+  left_join(dicc_dptos, by = c("codigo_departamento_indec", "id_provincia_indec")) %>% 
+  left_join(dicc_sector, by = "clae2")
+```
+
+Tras realizar el join, podemos proceder a explorar nuevamente la base. En este caso, nos resulta interesante revisar algunas tendencias de medida central.
+
+```{r}
+summary(tot_regis_act)
+```
+
+Al igual que en el ejercicio anterior, nos encontramos con que la base tiene valores perdidos, identificados de diversas formas, para las variables *codigo_departamento_indec*, *id_provincia_indec*, *w_mean*. Procederemos a quitar estas observaciones. A su vez, quitaremos las observaciones que corresponden a "otros sectores" (cod. 999) dentro de la variable *clae2*.
+Por último, simplemente por comodidad, renombraremos algunas variables.
+
+```{r}
+tot_regis_act <- tot_regis_act %>% 
+  rename(cod_dpto = codigo_departamento_indec,
+         cod_prov = id_provincia_indec,
+         nom_dpto = nombre_departamento_indec,
+         nom_prov = nombre_provincia_indec) %>% 
+  filter(cod_dpto != "NA",
+         clae2 != 999,
+         w_mean != -99)
+
+summary(tot_regis_act)
+```
+
+<br>
+
+##### Identificando los 5 sectores de actividad con menores salarios
+
+Para la resolución de este ejercicio nuestra propuesta se basa en presentar los salarios promedios por sector de actividad para el conjunto del país, por año.
+
+Antes de avanzar en esta línea consideramos necesario realizar una aclaración. Calcular promedios de promedios, cuando cada uno de los promedios de base utilizados no cuentan con la misma cantidad de observaciones individuales, no resulta el procedimiento adecuado. Al hacerlo, estamos dando mayor peso a aquellos departamentos que cuentan con menores observaciones individuales para cada actividad/sector. Sin embargo, dado que no contamos con la base completa de salarios, el procedimiento que realizaremos puede ser una buena forma de aproximarnos a la resolución de la consigna estipulada para este trabajo.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+mean_sect_ano <- tot_regis_act %>% 
+  select(fecha, w_mean, letra, letra_desc) %>% 
+  group_by(year(fecha), letra, letra_desc) %>% 
+  summarise(mean_sector = mean(w_mean))
+
+mean_sect_ano <- mean_sect_ano %>% 
+   rename("year" = "year(fecha)") %>% 
+   mutate(letra_desc = case_when(letra == "D" ~ "Suministro De Elect., Gas, Vapor, A. A.",
+                                 letra == "E" ~ "Suministro agua, g. de residuos y saneamiento",
+                                 letra == "G" ~ "Comercio p/mayor y p/menor, rep. de vehiculos",
+                                 letra == "H" ~ "Serv. De Transporte Y Almacenamiento",
+                                 letra == "I" ~ "Serv. De Alojamiento Y Serv. De Comida",
+                                 letra == "K" ~ "Int. Financiera Y Serv. De Seguros",
+                                 letra == "L" ~ "Serv. Inmobiliarios",
+                                 letra == "M" ~ "Serv. Profesionales, Científicos Y Técnicos",
+                                 letra == "N" ~ "Act. Administrativas Y Serv. De Apoyo",
+                                 letra == "O" ~ "Adm. Publica, Defensa Y S. S. Obligatoria",
+                                 letra == "Q" ~ "Salud Humana Y Serv. Soc.",
+                                 letra == "R" ~ "Serv. Art., Cult., Dep.  Y Esparcimiento",
+                                 letra == "S" ~ "Serv. De Asoc. Y Serv. Personales",
+                                 letra != "D" & letra != "E" & letra != "G" & letra != "H" & letra != "I" & letra != "K" & letra != "L" & letra != "M" & letra != "N" & letra != "O" & letra != "Q" & letra != "R" & letra != "S" ~ letra_desc),
+          letra_desc =  str_to_title(letra_desc)) %>% 
+  arrange(year, mean_sector)
+
+#write.csv(mean_sect_ano, file = "mean_sect_ano.csv", row.names = FALSE)
+            
+```
+
+
+Con esta nueva tabla, podemos avanzar en la construcción de nuestra visualización. Con el objetivo de realizar una visualización más sencilla, hemos realizado un recorte temporal, tomando solamente los años previos a la pandemia.
+
+A su vez, hemos decidido mostrar los los 6 sectores de menores salarios resaltándolos en colores, frente al resto de los sectores, que son presentados en una escala de grises. De esta forma, podemos visualizar la evolución de los sectores de interés, frente a la del resto de sectores de actividad.
+
+
+
+```{r fig.height = 8, fig.width = 12}
+colores3 <- c("#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#E377C2", paletteer_dynamic("cartography::grey.pal", 13))
+
+mean_sect_ano %>%
+  filter(year <= 2019)%>% 
+  ggplot(aes(x = factor(letra, levels = c("I", "P", "N", "L", "S", "R", "F", "G", "Q", "A", "M", "O", "C", "J", "E", "H", "K", "D", "B")), y = mean_sector, fill = factor(letra_desc, levels = c("Serv. De Alojamiento Y Serv. De Comida", "Enseñanza", "Act. Administrativas Y Serv. De Apoyo", "Serv. Inmobiliarios", "Serv. De Asoc. Y Serv. Personales", "Serv. Art., Cult., Dep.  Y Esparcimiento", "Construcción", "Comercio P/Mayor Y P/Menor, Rep. De Vehiculos", "Salud Humana Y Serv. Soc.", "Agricultura, Ganadería, Caza, Silvicultura Y Pesca", "Serv. Profesionales, Científicos Y Técnicos", "Adm. Publica, Defensa Y S. S. Obligatoria", "Industria Manufacturera", "Información Y Comunicaciones", "Suministro Agua, G. De Residuos Y Saneamiento", "Serv. De Transporte Y Almacenamiento", "Int. Financiera Y Serv. De Seguros", "Suministro De Elect., Gas, Vapor, A. A.", "Explotacion De Minas Y Canteras"))))+
+  geom_col(width = 0.5)+
+  scale_fill_manual(name = "Sector de actividad", values = c(colores3))+
+  facet_wrap(~year, 5, 2)+
+  labs(title = "Salario promedio por sector, 2014-2019",
+       subtitle = "Total país",
+       x = "Código sector de actividad",
+       y = "Salario promedio",
+       caption = "Fuente: Ministerio de Desarrollo Productivo - Argentina
+       Elaboración: propia")+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        axis.text.y = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        legend.title = element_text(size = 7, angle = 90, hjust = 0.5),
+        legend.text = element_text(size = 6),
+        legend.position = "bottom")
+```
+
+
+
+
+
+
+
+
+
+
+

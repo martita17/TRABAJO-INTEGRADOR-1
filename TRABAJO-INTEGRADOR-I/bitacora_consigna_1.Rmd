@@ -1,0 +1,356 @@
+---
+title: "TRABAJO INTEGRADOR I - Bitácora 1"
+author: "Fauquié - Peiretti - Tapia Serrano"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: united
+    fig_width: 8
+    fig_height: 6
+---
+
+El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 1 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
+
+Para el desarrollo hemos utilizado las bases y diccionarios del [Ministerio de Desarrollo Productivo de la República Argentina](https://datos.produccion.gob.ar/dataset/salarios-por-departamento-partido-y-sector-de-actividad) y otra base geográfica complementaria tomada del repositorio GitHub [mgaitan](https://github.com/mgaitan/departamentos_argentina).
+
+<br>
+
+### Consigna 1
+_______________________________________________________________________________________
+**Identificar los departamentos con mayores salarios a partir de un mapa coroplético.**
+
+<br>
+
+##### Cargamos las librerías
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(fuzzyjoin)
+library(stringr)
+library(stringi)
+library(tm)
+library(leaflet)
+```
+
+<br>
+
+##### Cargamos las bases geográficas
+
+En esta instancia utilizaremos la **base geográfica** conseguida en la web y el **Diccionario de Departamentos** aportado por el Ministerio de Desarrollo Productivo. El objetivo es obtener una base compatible para realizar un join con las bases disponibles de salarios promedios.
+```{r}
+dptos_full <- read_sf("BASES-Y-VIZ/PREPARACION/departamentos-argentina.json")
+
+dicc_dptos <- read.csv(file = "https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/diccionario_cod_depto.csv")
+```
+
+<br>
+
+##### Exploramos y preparamos la base
+
+Al cargar las bases y revisar las características descriptas en el **Environment** podemos identificar que la base geográfica contiene 17 observaciones más que el diccionario de departamentos. A fin de avanzar con la limpieza para compatibilizar ambas bases, recurrimos a algunas funciones útiles para explorar las bases.
+
+```{r}
+glimpse(dicc_dptos)
+glimpse(dptos_full)
+```
+
+Efectivamente, comprobamos que entre ambas bases existen 17 observaciones de diferencia y, además, que las únicas columnas que se podrían utilizar para realizar el join son las que contienen los nombres de las Provincias y los Departamentos.
+
+Antes de avanzar sobre el join, intentaremos identificar cuáles son las observaciones que faltan en el diccionario. Para ello, revisaremos la cantidad de departamentos por provincia.
+
+Primero en el diccionario:
+```{r}
+frec_dicc <- dicc_dptos %>% 
+  rename(provincia = nombre_provincia_indec) %>% 
+  group_by(provincia) %>% 
+  summarise(freq = n())
+
+frec_bd_geo <- dptos_full %>%
+  as.data.frame() %>% 
+  select(departamento,provincia) %>% 
+  group_by(provincia) %>% 
+  summarise(freq = n())
+
+frec_bd_geo$provincia <- str_to_title(frec_bd_geo$provincia)
+
+frecuencias <- frec_bd_geo %>% 
+  left_join(frec_dicc, by = "provincia") %>% 
+  print()
+```
+
+A través de la revisión de la tabla obtenida, podemos identificar diferencias en tres provincias: CABA, Salta y Tierra del Fuego. A través de una revisión "manual" del diccionario y la base geográfica identificamos que:
+
+- CABA, en la base geográfica, se encuentra dividida en sus 15 comunas, mientras que en el diccionario aparece identificada de forma unificada
+- Salta tiene un departamento más en la base geográfica, se trata de La Caldera
+- Tierra del Fuego contiene dos reparticiones en la base geográfica que en el diccionario no están: Islas Malvinas e Islas del Atlántico Sur
+
+Debido a que el diccionario debe servirnos de guía, dado que nuestro objetivo es trabajar con las bases del Ministerio, a continuación realizaremos una serie de procesamientos sobre la base geográfica que nos permitan unificar CABA y quitar los departamentos "extras" de Tierra del Fuego y Salta.
+
+```{r}
+caba_unificada <- dptos_full %>%
+  filter(provincia == "CIUDAD AUTONOMA DE BUENOS AIRES") %>%
+  summarize(id = first(id),
+            departamento = "CABA",
+            cabecera = NA,
+            provincia = "CABA",
+            geometry = st_union(geometry))
+
+salta <- dptos_full %>% 
+  filter(provincia == "SALTA",
+         departamento != "LA CALDERA") %>% 
+  select(id, departamento, cabecera, provincia, geometry)
+
+tierra_fuego <- dptos_full %>% 
+  filter(provincia == "TIERRA DEL FUEGO",
+         departamento != "ISLAS MALVINAS" & departamento != "ISLAS DEL ATLANTICO SUR") %>% 
+  select(id, departamento, cabecera, provincia, geometry)
+
+dptos_full <- dptos_full %>%
+  filter(provincia != "CIUDAD AUTONOMA DE BUENOS AIRES" & provincia != "SALTA" & provincia != "TIERRA DEL FUEGO") %>%
+  bind_rows(caba_unificada, salta, tierra_fuego)
+```
+
+Ya estaríamos en condiciones de afirmar que nuestras dos bases de interés van a tener coincidencia en los departamentos que contienen. Sin embargo, antes de avanzar sobre el join, debemos realizar una serie de procesamientos sobre los nombres de algunas columnas, a fin de volver más comprensible el join, y sobre la forma en que se encuentran escritos los nombres de las provincias y departamentos en ambas bases (normalización de los textos: transformación de todas las letras en mayúsculas, eliminación de puntuación y acentos).
+
+```{r}
+dicc_dptos <- rename(dicc_dptos,
+                     departamento = nombre_departamento_indec,
+                     provincia = nombre_provincia_indec)
+
+dicc_dptos$provincia <- dicc_dptos$provincia %>% 
+  toupper() %>% 
+  removePunctuation() %>% 
+  stri_trans_general("Latin-ASCII")
+
+dicc_dptos$departamento <- dicc_dptos$departamento %>% 
+  toupper() %>% 
+  removePunctuation() %>% 
+  stri_trans_general("Latin-ASCII")
+
+dptos_full$departamento <- dptos_full$departamento %>% 
+  toupper() %>% 
+  removePunctuation() %>% 
+  stri_trans_general("Latin-ASCII")
+
+dptos_full$provincia <- dptos_full$provincia %>% 
+  toupper() %>% 
+  removePunctuation() %>% 
+  stri_trans_general("Latin-ASCII")
+
+dptos_full$cabecera <- dptos_full$cabecera %>% 
+  toupper() %>% 
+  removePunctuation() %>% 
+  stri_trans_general("Latin-ASCII")
+
+```
+
+<br>
+
+##### Momento join
+Ahora sí, estamos en condiciones de avanzar sobre la unificación del diccionario y la base geográfica, a fin de tener en una misma tabla los códigos de departamentos según INDEC y los polígonos de georeferenciación. Para hacerlo, utilizaremos la librería fuzzyjoin, dado que todavía podemos encontrarnos con diferencias en la forma en que se encuentran nombrados algunos departamentos y provincias.
+
+```{r}
+bd_dptos <- dptos_full %>% 
+  stringdist_left_join(dicc_dptos, by = c("departamento", "provincia"), max_dist = 1)
+```
+
+Al hacer el join, encontramos que la nueva base tiene dos observaciones más de las que debería. Esto, posiblemente, se debe a que hay algún departamento que encontró más de un match debido a la flexibilidad del tipo de join que elegimos. Realizamos algunas exploraciones a fin de detectar los problemas.
+
+```{r}
+which((bd_dptos$departamento.x==bd_dptos$departamento.y) == FALSE)
+```
+Nos encontramos con que los siguientes departamentos han macheado entre sí, duplicándose: **`r bd_dptos$departamento.x[c(88, 133)]`**. Tal como anticipamos, esto se debe a que al momento de configurar el fuzzy_join le indicamos que podía existir una variación de hasta 1 caracter.
+Procedemos a remover las filas que no corresponden (orden 88 y 133).
+
+```{r}
+bd_dptos <- bd_dptos[-c(88, 133), ]
+```
+
+Realizamos otras exploraciones a fin de asegurarnos que la base cuenta con todos los códigos de departamento según INDEC
+
+```{r}
+which(is.na(bd_dptos$codigo_departamento_indec))
+```
+
+Identificamos que, por diferencias en el modo en que están escritos, no hemos conseguido match en los siguientes departamentos: **`r bd_dptos$departamento.x[c(31, 173, 200, 228, 233, 237, 263, 509)]`**. Procederemos a filtrar las filas de estos departamentos e incorporar de forma manual nuevas filas que contengan estos departamentos con sus respectivos códigos.
+
+```{r}
+dptos_perdidos <- bd_dptos %>% 
+  filter(is.na(codigo_departamento_indec)) %>% 
+  mutate(codigo_departamento_indec = c(46084, 6217, 86098, 46084, 46056, 46070, 38021, 94007))
+
+bd_dptos <- bd_dptos %>% 
+  filter(departamento.x != "CORONEL FELIPE VARELA",
+         departamento.x != "CHASCOMUS",
+         departamento.x != "JUAN F IBARRA",
+         departamento.x != "GENERAL OCAMPO",
+         departamento.x != "GENERAL ANGEL V PENALOZA",
+         departamento.x != "GENERAL JUAN F QUIROGA",
+         departamento.x != "DOCTOR MANUEL BELGRANO",
+         departamento.x != "RIO GRANDE") %>% 
+  bind_rows(dptos_perdidos)
+```
+
+Limpiamos la que será nuestra base final, quedándonos solamente con las variables que nos interesan.
+
+```{r}
+bd_dptos <- bd_dptos %>% 
+  select(departamento.x, provincia.x, geometry, codigo_departamento_indec, id_provincia_indec) %>% 
+  rename(nom_dpto = departamento.x,
+         nom_prov = provincia.x,
+         cod_dpto = codigo_departamento_indec,
+         cod_prov = id_provincia_indec)
+```
+
+  
+<br>
+
+##### Probamos la visualización
+
+```{r}
+ggplot(bd_dptos) +
+  geom_sf()
+```
+  
+<br>
+
+##### Avanzamos hacia el mapa coroplético
+
+A continuación, para avanzar en la construcción de nuestro mapa coroplético que nos permita identificar los departamentos de mayores salarios en la Argentina, utilizaremos la base de **Salarios promedio por departamento/partido. Datos Consolidados**. La misma ha sido tomada, al igual que el Diccionario de Departamentos, del sitio web del Ministerio de Desarrollo Productivo.
+
+Cargamos y exploramos la base de salarios
+
+```{r}
+regis_dpto <- read.csv(file = "https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/salarios/w_mean_depto_total.csv")
+
+summary(regis_dpto)
+```
+Podemos observar que la base elegida para este ejercicio cuenta con 60096 observaciones y cuatro variables:
+
+- fecha: sobre la cuál solamente sabemos que esta en formato caracter.
+- codigo_departamento_indec: podemos identificar que, a persar de ser una variable categorial, se encuentra en algún tipo de formato numérico por el tipo de información que se nos aporta. A su vez, podemos identificar que hay 119 observaciones para las cuales no se ha identificado un departamento específico. Esta variable será una de las que nos permitirá realizar el join con nuestra base geográfica.
+- codigo_provincia_indec: tenemos exáctamente la misma situación que con la variable anterior.
+- w_mean: se trata de la variable con los salarios promedios y se encuentra en algún tipo de formato numérico. Más allá de las medidas de tendencia central, una de las cuestiones relevantes que podemos observar es que esta variable cuenta con observaciones con valores *-99*, que seguramente están indicando valores perdidos por algún motivo.
+
+Ahora revisaremos un poco mejor la variable fecha.
+
+```{r}
+summary(as.Date(regis_dpto$fecha))
+```
+Nos encontramos con que esta variable no cuenta con valores perdidos (al menos no identificados como tales en la base). A su vez, con que parece tratarse de una serie mensual con un recorte temporal que va de enero de 2014 a noviembre de 2023.
+
+Teniendo esta información en mente, nuestra propuesta será trabajar con los datos disponibles para el año 2022, que es el último año que se encuentra completo. A su vez, buscaremos calcular los salarios primedio para los cuatro trimestres de dicho año y reflejarlos en un mapa coroplético.
+
+<br>
+
+##### Limpieza y preparación de la base
+
+A continuación, realizamos el recorte temporal que nos interesa, quitamos las observaciones con *NA* y los *-99* y preparamos los nombres de las variables que usaremos para el join a fin de facilitarnos la lectura del código. A su vez, hemos sumado una nueva variable que contiene el trimestre al cual pertenece cada observación.
+```{r}
+salarios_2022 <- regis_dpto %>% 
+  mutate(fecha = as.Date(fecha),
+         trimestre = quarter(as.Date(fecha))) %>% 
+  filter(fecha >= "2022-01-01",
+         fecha <= "2022-12-01",
+         codigo_departamento_indec != "NA",
+         id_provincia_indec != "NA",
+         w_mean != -99) %>% 
+  rename(cod_dpto = codigo_departamento_indec,
+         cod_prov = id_provincia_indec)
+```
+
+Con el objetivo de asegurarnos que nuestro código  anterior haya funcionado correctamente, volvemos a pasarle la función *summary* a toda la base.
+
+```{r}
+summary(salarios_2022)
+```
+
+¡Comprobamos que todo parace estar correcto!
+
+A continuación preparamos la base con los salarios promedios para que nos brinde los salarios promedio por trimestre para cada uno de los departamentos con observaciones.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+salarios_tr_2022 <- salarios_2022 %>% 
+  group_by(trimestre, cod_dpto) %>% 
+  summarise(mean = mean(w_mean))
+```
+
+Estamos en condiciones de realizar el join con nuestra base geográfica.
+
+```{r echo=TRUE, warning=FALSE, message=FALSE}
+salarios_tr2022_geo <- bd_dptos %>% 
+  left_join(salarios_tr_2022, by = "cod_dpto")
+```
+Revisemos la base que hemos obtenido
+
+```{r}
+summary(salarios_tr2022_geo)
+```
+
+Nos encontramos con que se han generado 8 observaciones más que las esperadas y que estas cuentan con valores perdidos para las variables *trimestr* y *salario primedio*. Deberemos retirar estas observaiones de la base.
+
+```{r}
+salarios_tr2022_geo <- salarios_tr2022_geo %>% 
+  filter(mean != "NA")
+
+#saveRDS(salarios_tr2022_geo, file = "salarios_tr2022_geo.rds")
+```
+
+<br>
+
+##### Visualizamos
+
+Con nuestra base lista, avanzamos con las visualizaciones por trimestre.
+Comenzamos creando la paleta de colores que utilizaremos.
+```{r}
+paleta2 <- colorNumeric(palette = "viridis", domain = salarios_tr2022_geo$mean)
+```
+
+
+**Primer Trimestre de 2022**
+```{r}
+leaflet(filter(salarios_tr2022_geo, trimestre == 1)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Primer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+
+**Segundo Trimestre de 2022**
+```{r}
+leaflet(filter(salarios_tr2022_geo, trimestre == 2)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Segundo trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+
+**Tercer Trimestre de 2022**
+```{r}
+leaflet(filter(salarios_tr2022_geo, trimestre == 3)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Tercer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+
+
+**Cuarto Trimestre de 2022**
+```{r}
+leaflet(filter(salarios_tr2022_geo, trimestre == 4)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Cuarto trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+
+
