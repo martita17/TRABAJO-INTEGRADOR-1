@@ -1,0 +1,176 @@
+---
+title: "TRABAJO INTEGRADOR I - Presentación final"
+author: "Fauquié - Peiretti - Tapia Serrano"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    theme: united
+    fig_width: 8
+    fig_height: 6
+---
+
+```{r include=FALSE}
+# CARGAMOS LAS LIBRERÍAS
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(fuzzyjoin)
+library(stringr)
+library(stringi)
+library(tm)
+library(leaflet)
+library(paletteer)
+
+# CARGAMOS LAS BASES Y OBJETOS QUE UTILIZAREMOS
+salarios_tr2022_geo <- read_rds(file = "BASES-Y-VIZ/PRESENTACION_FINAL/salarios_tr2022_geo.rds") 
+paleta2 <- colorNumeric(palette = "viridis", domain = salarios_tr2022_geo$mean)
+mean_sect_ano <- read.csv("BASES-Y-VIZ//PRESENTACION_FINAL/mean_sect_ano.csv", header = TRUE)
+colores3 <- c("#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD", "#E377C2", paletteer_dynamic("cartography::grey.pal", 13))
+```
+
+
+<br>
+
+### Consigna 1
+_______________________________________________________________________________________
+**Identificar los departamentos con mayores salarios a partir de un mapa coroplético.**
+
+<br>
+
+```{r echo=FALSE}
+# CÓDIGO DE LA VISUALIZACIÓN
+# 1 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 1)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Primer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 2 o trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 2)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Segundo trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 3 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 3)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Tercer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 3 er trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 3)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Tercer trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+```{r}
+# 4 o trimestre
+leaflet(filter(salarios_tr2022_geo, trimestre == 4)) %>% 
+  addTiles() %>% 
+  addPolygons(popup = ~paste("Cuarto trimestre de 2022", "</br>Provincia:", str_to_title(nom_prov), "</br>Departamento:", str_to_title(nom_dpto), "</br>Salario promedio: $", as.character(round(mean, digits = 2))),
+              fillColor = ~paleta2(mean),
+              weight = 0,
+              fillOpacity = 0.9)
+```
+
+<br>
+
+De acuerdo a la disposición de los salarios promedio de cada departamento de Argentina representados en los mapas coropléticos que anteceden, para el año 2022 es posible identificar que la zona geográfica donde se concentran los salarios más altos es la Región Patagónica, territorio vinculado a la extracción de petróleo y gas y a la producción hidrocarburífera. Para el primer cuatrimestre del año 2022, los departamentos con salarios promedio más altos del país son  Río Chico, Magallanes y Lago de Buenos Aires de la Provincia de Santa Cruz y Pehuenches de la Provincia de Neuquén. Departamentos como Deseado de Santa Cruz, Sarmiento y Escalante de Chubut también poseen salarios promedios altos en relación al resto del país.  
+Durante el segundo cuatrimestre, estos departamentos siguen manteniendo mayores salarios en relación a los otros, pero ya comienza a notarse la potencia de Pehuenches, Neuquén, departamento donde se ubica el yacimiento de petróleo y gas más grande del país, Vaca Muerta. Esta dependencia incrementa sus salarios promedio durante el tercer cuatrimestre, asumiendo la delantera e incrementándola para el último período del año. Resulta evidente que el desarrollo de la actividad en torno al yacimiento potenció además el aumento de los salarios de la zona: todos los departamentos ubicados en el sector ven favorecidos sus salarios promedio, como es el caso de Puelen, Anelo, Confluencia y Chos Malal. De igual manera, Deseado y Río Chico, siguen siendo departamentos cabecera, al igual que Magallanes, Lago Buenos Aires y Guer Aike. 
+
+
+<br>
+
+### Consigna 2
+_______________________________________________________________________________________
+**Identificar los 5 sectores de actividad con salarios más bajos, expresados en un gráfico de barras**
+
+<br>
+
+```{r echo=FALSE, fig.width=12, fig.height=8}
+# CÓDIGO DE LA VISUALIZACIÓN
+mean_sect_ano %>%
+  filter(year <= 2019)%>% 
+  ggplot(aes(x = factor(letra, levels = c("I", "P", "N", "L", "S", "R", "F", "G", "Q", "A", "M", "O", "C", "J", "E", "H", "K", "D", "B")), y = mean_sector, fill = factor(letra_desc, levels = c("Serv. De Alojamiento Y Serv. De Comida", "Enseñanza", "Act. Administrativas Y Serv. De Apoyo", "Serv. Inmobiliarios", "Serv. De Asoc. Y Serv. Personales", "Serv. Art., Cult., Dep.  Y Esparcimiento", "Construcción", "Comercio P/Mayor Y P/Menor, Rep. De Vehiculos", "Salud Humana Y Serv. Soc.", "Agricultura, Ganadería, Caza, Silvicultura Y Pesca", "Serv. Profesionales, Científicos Y Técnicos", "Adm. Publica, Defensa Y S. S. Obligatoria", "Industria Manufacturera", "Información Y Comunicaciones", "Suministro Agua, G. De Residuos Y Saneamiento", "Serv. De Transporte Y Almacenamiento", "Int. Financiera Y Serv. De Seguros", "Suministro De Elect., Gas, Vapor, A. A.", "Explotacion De Minas Y Canteras"))))+
+  geom_col(width = 0.5)+
+  scale_fill_manual(name = "Sector de actividad", values = c(colores3))+
+  facet_wrap(~year, 5, 2)+
+  labs(title = "Salario promedio por sector, 2014-2019",
+       subtitle = "Total país",
+       x = "Código sector de actividad",
+       y = "Salario promedio",
+       caption = "Fuente: Ministerio de Desarrollo Productivo - Argentina
+       Elaboración: propia")+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        axis.text.y = element_text(size = 7, face = "bold", angle = 0, vjust = 0.4),
+        legend.title = element_text(size = 7, angle = 90, hjust = 0.5),
+        legend.text = element_text(size = 6),
+        legend.position = "bottom")
+```
+En el gráfico que antecede, se representan los salarios promedio por sectores de actividad desde el año 2014 al 2019, resaltando los 6 sectores de actividad con menor salario. Se realizó ese recorte temporal buscando analizar los salarios promedio por sector antes de la llegada de la Pandemia del Covid-19 durante el 2020. Se tomaron 6 sectores de actividad porque a partir del año 2017, el sector económico que ocupa el quinto lugar en el orden de menor a mayor salario cambia por el que anteriormente ocupaba el sexto, por lo que se decidió incorporarlo a la representación gráfica. 
+En términos generales, es posible identificar que los sectores que poseen menores salarios promedio desde el 2014 la 2019 se mantienen estables, salvo el cambio mencionado anteriormente en el año 2017. 
+A lo largo de todo el período,  el primer lugar lo ocupan los Servicios de Alojamiento y Servicios de comida, sector que incluye actividades como los servicios de alojamiento en hoteles, pensiones, campings, servicios temporales, expendio de comidas y bebidas, preparación de comidas para llevar, para empresas, para eventos y preparación de comidas por y para vendedores ambulantes.
+En segundo lugar sigue el sector de la Enseñanza, involucrando las tareas de educación inicial, primaria, secundaria, superior y de posgrado, idiomas, cursos y enseñanza para adultos. 
+En tercer lugar se encuentra el sector las Actividades Administrativas y los Servicios de apoyo, que abarca actividades como el alquiler y arrendamiento de equipos de transporte, de efectos personales, de enseres domésticos, maquinaria y de bienes intangibles no financieros. Incluye también la obtención y dotación de personal, los servicios minoristas de agencias de viajes y servicios de apoyo a oficinas y empresas entre otras actividades. 
+En cuarto lugar se ubican los Servicios inmobiliarios  que involucran todas aquellas actividades vinculadas a este tipo de servicio y a administración de consorcios. 
+En quinto lugar, desde el 2014 hasta el año 2016 están los Servicios de Asociaciones y servicios Personales, incluyendo los servicios de organizaciones empresariales, profesionales y de empleadores, como también servicios de sindicatos, organizaciones religiosas, organizaciones políticas. Contienen también los servicios de reparación de equipos y efectos personales diversos, peluquería y servicio doméstico entre otros. 
+Desde el año 2017 hasta el 2019, el quinto lugar lo ocupan los Servicios Artísticos, Culturales, Deportivos y de Esparcimiento, sector que hasta el 2016 se ubicaba en el sexto lugar, envolviendo entre otras, las actividades del arte, el espectáculo, bibliotecas y parques nacionales 
+Es importante destacar que solo se han considerado para este análisis los salarios registrados. 
+
+
+<br>
+
+### Consigna 3
+_______________________________________________________________________________________
+**Estime el salario promedio del total del país a lo largo de los años disponibles en la base. Luego, elija cuatro sectores de actividad (los cuales se distinguen por la letra) o grupos de sectores y visualice la evolución de sus salarios expresados en relación al promedio nacional. Por ejemplo, si para un año X, el salario promedio nacional es 100 y el de la rama petrolera es 150, el dato para la última rama debe expresarse como 1,5**
+
+<br>
+
+![Animation](BASES-Y-VIZ/VIZ/graf_comp.gif)
+
+<br>
+
+Con el objetivo de visualizar la evolución de los salarios de diferentes sectores de actividad económica en relación al promedio nacional, se seleccionaron 4 sectores de actividad que reflejen dispersión en relación a la media. Buscando partir de los datos más actuales, se tomó como año de referencia el 2023, y se identificó el sector con el salario promedio mínimo, y los sectores con salario promedio que representaran los cortes en el 25% y el 75% de las frecuencias acumuladas y el sector de máximo ingreso promedio. Siguiendo ese criterio, se obtuvo la siguiente selección de sectores: 
+-	Servicios de Alojamiento y Servicios de comida
+-	Servicios de Asociaciones y servicios personales
+-	Información y Comunicaciones
+-	Explotación de Minas y Canteras
+Para cada uno de estos sectores, se representó su valor proporcional en función a la media nacional desde el año 2014 al 2023. Como puede observarse en el gráfico, si bien todos tienen una variación con respecto a la media a lo largo del período de referencia, ningún sector altera su posición en relación al promedio nacional. 
+Entre el 2014 y el 2023, el sector económico con menores salarios promedio del país, Servicios de Alojamiento y Comida, representa entre un 45% y 55%  del salario promedio nacional, siendo el año 2015 donde alcanza su valor más alto en relación a la media nacional (55%). 
+El siguiente sector económico seleccionado, los Servicios de asociaciones y servicios personales representa entre un 65% y un 69%  del promedio nacional, siendo el año 2020 donde alcanza su pico en relación a éste. Cabe destacar que este es el sector con menor variación porcentual respecto a la media. 
+Por su parte, el sector de Información y Comunicaciones tiene un salario promedio que supera a la media nacional, es entre un 112% y un 120% más alto, alcanzando en el año 2021 su mayor valor con respecto a ésta. 
+Por último, el sector de Explotación de Minas y Canteras, que posee los salarios promedio más altos del país, sobresale en relación al salario medio por un 231% y un 250% logrando su mayor distancia en el año 2022 (250%). 
+Tal como puede visualizarse en el gráfico, la variación de cada salario en función a la media nacional no tiene un comportamiento semejante entre sectores de actividad a lo largo de los años, sino que, como se detalló anteriormente, cada uno presenta su mayor valor porcentual en relación al promedio nacional durante diferentes años. 
+
+
+<br>
+
+![Brecha Salarial](BASES-Y-VIZ/VIZ/brecha_salarial_plot.png)
+
+<br>
+Finalmente, con el objetivo de dar cuenta de las diferencias porcentuales entre los salarios promedio más bajos y más altos de los sectores de actividad anteriormente considerados, resulta oportuno incluir en este análisis el factor de la brecha salarial entre los salarios promedio mínimo y máximo a nivel nacional por año, desde el 2014 al 2023. 
+Para eso, se representó la brecha porcentual por año en el gráfico anterior, donde puede verse que las diferencias entre los salarios mínimos y máximos se mantienen relativamente estables entre los años 2014 y 2018, alcanzando un valor de entre 437 y 457%. Por su parte, a partir del 2019 la brecha crece a un 485% para superar el 551% en el año 2020, alcanzando su máximo valor dentro del período estudiado. En los años subsiguientes si bien disminuye, no baja del 500% sino hasta el 2023 que asume un valor apenas más bajo, similar al del 2019, sin lograr alcanzar los valores anteriores. 
