@@ -6,7 +6,7 @@
 
 El siguiente repositorio contiene los distintos procesamientos realizados sobre datos del Ministerio de Desarrollo Productivo de la República Argentina en respuesta a las consignas propuestas por la Diplomatura.
 
-- El archivo **presentacion_analisis.html** contiene análisis, observaciones y hallazgos, así como gráficos realizados.
+- El archivo **presentacion_analisis_final.Rmd** contiene análisis, observaciones y hallazgos, así como gráficos realizados. Se lo puede descargar directamente como html en [este link](https://drive.google.com/file/d/1uF8SbLKFBxHzGck60jFBYn8tLX0wNTf0/view?usp=drive_link)
 - Los archivos **bitacora_consigna_1**, **bitacora_consigna_2** y **bitacora_consigna_3** contienen de manera más pormenorizada los pasos y procesos que se siguieron para obtener, limpiar y procesar la información. Están en formato HTML así como en Rmd para que se puedan consultar o bien ejecutar.
 
 Se recomienda descargar todo el repositorio para consultar los archivos. De esta forma, se descargarán también los gráficos y las bases invocadas en los archivos, y se podrán mantener sus rutas.
