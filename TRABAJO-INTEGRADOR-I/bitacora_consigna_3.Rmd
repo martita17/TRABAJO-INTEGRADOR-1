@@ -9,7 +9,7 @@ output:
     fig_height: 6
 ---
 
-El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 1 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
+El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 3 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
 
 Para el desarrollo de esta última consigna hemos utilizado la base obtenida como resultado en la consigna 2, la cual ha sido construida a partir de datos relevados por el [Ministerio de Desarrollo Productivo de la República Argentina](https://datos.produccion.gob.ar/dataset/salarios-por-departamento-partido-y-sector-de-actividad).
 
@@ -74,42 +74,59 @@ cuartil4<-mean_sect_ej3 %>%
 
 <br>
 
-##### Consolidación de nueva base 
+##### Cálculo del salario promedio nacional y comparación con salarios por sector 
 
-Creamos una nueva base "salario_x_year" con el promedio salarial nacional por año. Para ello hicimos una agregación de todos los sectores cada año, y a la columna "letra_desc" (que antes tenía la descripción de los sectores) le asignamos el valor "nacional". 
+Creamos una nueva base "salario_x_year" con el promedio salarial nacional por año. Para ello hacemos una agregación de todos los sectores cada año.
 
 ```{r,warning=FALSE, message=FALSE}
 salario_x_year <- mean_sect_ej3 %>%
   select(letra_desc, year, promediosector) %>%
   group_by(year) %>% 
-  summarize(promediosector = mean(promediosector, na.rm = TRUE)) %>% 
-  mutate(letra_desc = "nacional") %>% 
+  summarize(promedio_nacional = mean(promediosector, na.rm = TRUE)) %>% 
+  glimpse()
+```
+Ahora creamos una base que nos permita comparar el salario de cada sector cada año con el respectivo salario nacional para ese año. Para ello sumamos o "joineamos" la base "mean_sect_ej3" con "salario_x_year" y creamos una nueva columna "proporcion" con el dato de la proporción entre promedio salarial de sector y promedio salarial nacional.
+
+```{r,warning=FALSE, message=FALSE}
+salario_compa <- mean_sect_ej3 %>%
+  select(letra_desc, year, promediosector) %>%
+  group_by(year) %>%
+  left_join(salario_x_year, by = "year") %>%
+  mutate(proporcion = round(promediosector / promedio_nacional,2)) %>% 
+  glimpse()
+```
+Limpiamos esa base para sólo tener el valor de "proporcion" de cada sector por año. Además hacemos algunas transformaciones en la base "salario_x_year" con la intención de unir ambas y que así el salario nacional pueda ser tratado como un sector más para facilitar la comparativa.
+
+```{r,warning=FALSE, message=FALSE}
+final_compa <- salario_compa %>%
+  select(letra_desc, year, proporcion) %>% 
   glimpse()
 ```
 
-Luego creamos una base "evoluc_salarios" que combina el salario promedio por año de los cuatro sectores elegidos así como el salario promedio nacional por año. El salario nacional es entonces tratado como un sector más para poder observar las desviaciones de los sectores elegidos de un promedio general.
+```{r,warning=FALSE, message=FALSE}
+salario_nacional <- salario_x_year %>%
+  mutate(letra_desc = "nacional") %>%
+  rename(proporcion = promedio_nacional) %>%
+  mutate(proporcion = 1) %>% 
+  glimpse()
+```
+```{r,warning=FALSE, message=FALSE}
+final_compa <- bind_rows(final_compa, salario_nacional) 
+
+```
+
+Luego creamos una base "evoluc_salarios", en ella sólo nos quedaremos con la "proporcion" de los cuatro sectores elegidos y la nacional.
 
 ```{r,warning=FALSE, message=FALSE}
-evoluc_salarios<- mean_sect_ej3 %>% 
+evoluc_salarios<- final_compa %>% 
   filter(letra_desc == "Serv. De Alojamiento Y Serv. De Comida" |
            letra_desc == "Serv. De Asoc. Y Serv. Personales"|
            letra_desc == "Información Y Comunicaciones"|
-           letra_desc =="Explotacion De Minas Y Canteras") %>% 
-  bind_rows(salario_x_year) %>% 
+           letra_desc =="Explotacion De Minas Y Canteras"|
+           letra_desc == "nacional") %>% 
   glimpse()
 ```
 
-Con el objetivo de cumplir con la propuesta de la consigna, ahora procederemos a calcular los diferentes salarios promedios de cada sector, para cada año, como una proporción del promedio nacional para el 2014, primer año de la serie.
-
-```{r}
-mean_nac_ini <- evoluc_salarios %>% 
-  filter(year == min(year),
-         letra_desc == "nacional") %>% 
-  summarise (promediosector)
-
-evoluc_salarios <- evoluc_salarios %>% 
-  mutate(evo_prop = round(promediosector/mean_nac_ini$promediosector, 2))
-```
 
 <br>
 
@@ -118,20 +135,21 @@ evoluc_salarios <- evoluc_salarios %>%
 Hacemos un gráfico de barras animado que muestra la progresión entre el 2014 y el 2023 de los salarios de los sectores escogidos, mostrados como una proporción respecto del promedio nacional al inicio de la serie. 
 
 ```{r warning=FALSE, message=FALSE}
+
 graf_comp <- ggplot(evoluc_salarios) +
-  geom_col(aes(x = evo_prop, y = letra_desc, fill = letra_desc)) +
-  geom_text(aes(x = evo_prop, y = letra_desc, label = evo_prop), hjust = -0.2, size = 2) +
+  geom_col(aes(x = proporcion, y = letra_desc, fill = letra_desc)) +
+  geom_text(aes(x = proporcion, y = letra_desc, label = proporcion), hjust = -0.2, size = 5) +
   scale_fill_manual(values = c(
-    "nacional" = "#D3D3D3", 
-    "Información Y Comunicaciones" = "#FFB3BA", 
-    "Serv. De Alojamiento Y Serv. De Comida" = "#FFDFBA", 
-    "Serv. De Asoc. Y Serv. Personales" = "#FFFFBA", 
-    "Explotacion De Minas Y Canteras" = "#BAFFC9"
+    "nacional" = "#1F77B4", 
+    "Información Y Comunicaciones" = "#FF7F0E", 
+    "Serv. De Alojamiento Y Serv. De Comida" = "#2CA02C", 
+    "Serv. De Asoc. Y Serv. Personales" = "#D62728", 
+    "Explotacion De Minas Y Canteras" = "#9467BD"
   )) +
   theme_minimal() +
   labs(
     title = "Evolución salarial de los Sectores de Actividad elegidos,
-    respecto al salario promedio nacional para 2014",
+    respecto al salario promedio nacional",
     subtitle = "Año: {frame_time}",
     fill = "Sector de actividad",
     x = "Salario promedio en pesos",
@@ -153,16 +171,18 @@ graf_comp <- ggplot(evoluc_salarios) +
     plot.margin = margin(t = 30, r = 20, b = 10, l = 20),
   )
 
-anim <- graf_comp +
-  transition_time(year) +
-  ease_aes('linear')
+#anim <- graf_comp +
+  #transition_time(year) +
+  #ease_aes('linear')
 
-#anim_save("graf_comp.gif")
+#animation <- gganimate::animate(anim, width = 800, height = 600, dpi = 300, renderer = gifski_renderer())
+#gganimate::anim_save("graf_comp.gif", animation = animation)
 
 ```
 ¡Acá el resultado!
 
 ![Animation](BASES-Y-VIZ/VIZ/graf_comp.gif)
+
 <br>
 
 ##### Gráfico extra: brecha salarial por año
@@ -172,8 +192,8 @@ Hacemos un nuevo gráfico para poner el foco no sólo en la variación salarial 
 
 ```{r,warning=FALSE, message=FALSE}
 sal_year_brecha<- salario_x_year %>% 
-  select(year, promediosector) %>% 
-  rename(promedio_nacional= promediosector)
+  select(year, promedio_nacional) 
+ 
 
 
 brecha_salarial_porcentaje <- mean_sect_ej3 %>%

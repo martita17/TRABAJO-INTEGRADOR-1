@@ -9,7 +9,7 @@ output:
     fig_height: 6
 ---
 
-El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 1 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
+El presente documento busca describir los procesamientos realizados con el objetivo de cumplir la consigna 2 del Trabajo Integrador I, de la Diplomatura en Ciencias Sociales Computacionales y Humanidades Digitales, de la UNSAM.
 
 Para el desarrollo hemos utilizado las bases y diccionarios del [Ministerio de Desarrollo Productivo de la República Argentina](https://datos.produccion.gob.ar/dataset/salarios-por-departamento-partido-y-sector-de-actividad). Entre las bases del Ministerio de Desarrollo Productivo se ha escogido aquella que contiene el **salario promedio para el total de los trabajadores registrados (sector privado, empresas públicas y sector público), desagregado por departamento y por actividad**.
 
